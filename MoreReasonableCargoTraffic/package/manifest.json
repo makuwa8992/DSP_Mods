@@ -1,0 +1,9 @@
+{
+    "name": "MoreReasonableCargoTraffic",
+    "version_number": "1.2.1",
+    "website_url": "",
+    "description": "fixed some bugs when merging the belts or inserting cargoes in a closed loop of belts/修复环带插入爆带和并带不满的bug",
+    "dependencies": [
+        "xiaoye97-BepInEx-5.4.17"
+    ]
+}
