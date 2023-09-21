@@ -9,7 +9,7 @@ using BepInEx;
 
 namespace MoreReasonableCargoTraffic
 {
-    [BepInPlugin("shisang_MoreReasonableCargoTraffic", "MoreReasonableCargoTraffic", "1.2.1")]
+    [BepInPlugin("shisang_MoreReasonableCargoTraffic", "MoreReasonableCargoTraffic", "1.2.2")]
     public class MoreReasonableCargoTraffic : BaseUnityPlugin
     {
         void Awake()
@@ -18,6 +18,17 @@ namespace MoreReasonableCargoTraffic
             Debug.Log("Add MoreReasonableCargoTraffic");
         }
 
+        /*
+            并带不满bug修复思路:
+                给线路添加一个“最后刷新帧"(lastUpdate)的概念，在每帧线路刷新逻辑的末尾更新后解线程锁，更新方式为“lastUpdate = 当前游戏帧数 % 2”
+                然后，在线路尝试末端输出到另一条线路时(并入其它传送带时)，比较对方和自己的lastUpdate是否相同，因为此时自己的lastUpdated还未刷新，而上一帧结束时二者的lastUpdated是相同的
+                所以若此时二者lastUpdated不同则说明输出的目标线路在这一帧已经刷新过了，那么就将输出口往下游移动一小段距离，这一小段距离的长度取决于输出目标带子的速度，蓝带为5、绿带2、黄带1
+                所以当畅通时，原先的空隙后的货物前端会在这一帧会移动到我们预判的目标位置，如果货物前端并没有按带速移动，只可能是他前方堵住了，而被堵住也意味着空隙消失不再存在
+                而游戏内没有记录输出目标段传送带的数据，如果再加一个数据要动到拆建传送带时的函数，所以我这边偷懒直接用二分查找并记录来每帧维护目标带的编号
+                因为游戏里传送带线路中节点数据(Chunks)是按从上游到下游递增的，chunks[3*i]、chunks[3*i+1]、chunks[3*i]分别意味着第i段传送带的起始bufferIndex、buffer容量、速度
+                所以在CargoPath_UpDate_Prefix()的开头我先利用维护数据二分查找输出目标的"outputChunk"，在不重新拆建的情况下每帧刷新时查找的时间复杂度是O(1),改变目标带线路结构时复杂度是O(nlogn)
+                然后相比于原先的代码多出的计算量就一个跟新lastUpdate和比较lastUpdate了，从期望上来说每帧每条线路刷新时基本上可以看做就多了那么几次计算，所以对卡顿几乎没有影响
+        */
         [HarmonyPrefix]
         [HarmonyPatch(typeof(CargoPath), "Update")]
         public static bool CargoPath_UpDate_Prefix(CargoPath __instance)
@@ -54,7 +65,8 @@ namespace MoreReasonableCargoTraffic
                     {
                         Debug.Log("出现错误，没法找到并带节");
                     }
-                }
+                }//改动点1：从上次记录点开始二分查找目标节点的id，已获得速度，不改变线路构造的情况下查找的第一个就是目标节点
+
                 byte[] numArray = __instance.id > __instance.outputPath.id ? __instance.buffer : __instance.outputPath.buffer;
                 lock (__instance.id < __instance.outputPath.id ? __instance.buffer : __instance.outputPath.buffer)
                 {
@@ -72,6 +84,7 @@ namespace MoreReasonableCargoTraffic
                                     __instance.updateLen = __instance.bufferLength;
                                 }
                             }
+                            // TryInsertCargo中的第一个参数为改动点2，根据输出目标线路此帧是否以刷新来决定是否下移outputIndex(还有一些判断是为了防之后的逻辑中index超出bufferLength做的调整)
                             else if (__instance.outputPath.TryInsertCargo(__instance.lastUpdate == __instance.outputPath.lastUpdate ? __instance.outputIndex : (__instance.outputIndex + speed + 6 > __instance.outputPath.bufferLength ? __instance.outputPath.bufferLength - 6 : __instance.outputIndex + speed), cargoId))
                             {
                                 Array.Clear((Array)__instance.buffer, index - 4, 10);
@@ -108,7 +121,6 @@ namespace MoreReasonableCargoTraffic
                             }
                         }
                         int num2 = 0;
-                    label_41:
                         while (num2 < chunk)
                         {
                             int num3 = num1 - index2;
@@ -132,7 +144,7 @@ namespace MoreReasonableCargoTraffic
                                         --index5;
                                     }
                                     else
-                                        goto label_41;
+                                        break;
                                 }
                             }
                             else
@@ -142,12 +154,26 @@ namespace MoreReasonableCargoTraffic
                         if (num1 > num4)
                             num1 = num4;
                     }
-                    __instance.lastUpdate = (bool)((GameMain.gameTick & 1) == 1);
                 }
+                //改动点3：每帧刷新后解线程锁前更新lastUpdate
+                __instance.lastUpdate = (bool)((GameMain.gameTick & 1) == 1);
             }
             return false;
         }
 
+
+        /*
+            以下函数的改动与修复并带不满bug无关，只是为了修复插入环带防爆带的bug
+            TryInsertCargo和TryInsertItem的逻辑类似，一个是线路输入一个是其余建筑或手塞等非线路货物输入用到的函数
+            这里的改动体现在如果检测到目标是环带的话会提前检查线路末尾的10节buffer是否被占用，若有被占用的虚buffer(代码里叫borrowedBuffer)
+            则向前遍历时判定可插入的条件由找到10个空buffer变成找到10+borrowedBuffer个空buffer才可发生插入判定
+            实际上环带不爆带只需保证线路中永远有10个空buffer可以维持自插入时的货物转移即可，选末尾10个buffer的原因是因为这个自插入机制末尾的10个buffer和开头的10个buffer比其它部分的buffer更容易为空
+            尽可能的空可以使borrowedBuffer尽可能的小，减少向前遍历时的计算量
+            然后又修复了如果空隙分散的话即使空隙足够，在环带的头结点也难以插入货物的问题
+            这个问题的起因是原先的逻辑在向前遍历的时候遍历到buffer[0]处就终止遍历了，所以靠近buffer[0]的插入点实际能遍历的长度很小，就容易有空隙遍历不到
+            这边改成了如果检测到插入目标是环带，则在遍历到buffer[0]处后从buffer[bufferLength-10]处开始接着遍历
+            直到累计遍历2880buffer或者遍历到最开始的插入点(即绕了环带一圈)为止
+        */
         [HarmonyPrefix]
         [HarmonyPatch(typeof(CargoPath), "TryInsertCargo")]
         public static bool CargoPath_TryInsertCargo_Prefix(CargoPath __instance, ref bool __result, int index, int cargoId)
@@ -237,7 +263,7 @@ namespace MoreReasonableCargoTraffic
                         borrowedBuffer += 1;
                     }
                 }
-            }
+            }//判断目标带是环带时，通过遍历末10节buffer中非空buffer数来决定borrowedBuffer的大小
             for (int index2 = num7; index2 >= num7 - 2880 && index2 >= 0; --index2)
             {
                 if (__instance.buffer[index2] == (byte)0)
@@ -257,7 +283,7 @@ namespace MoreReasonableCargoTraffic
                 }
                 if (num9 == 10)
                 {
-                    num8_1 = num8;
+                    num8_1 = num8;//num8_1是临时用于记录num8的值的，num8是num7(插入点)后的连续空隙数，num9是累计空隙数，如果num8＞10的话会导致之后的逻辑出问题，所以这边我用这句逻辑保证连续空隙数>10的时候num8也不会大于10
                 }
                 if (num9 == 10 + borrowedBuffer)//num7后找满10+borrowedBuffer个空buffer时移动的buffer数
                 {
@@ -272,7 +298,7 @@ namespace MoreReasonableCargoTraffic
                     flag3 = true;
                     break;
                 }
-                if (__instance.closed && index2 == 0 && num7 > 9)
+                if (__instance.closed && index2 == 0 && num7 > 9)//遍历到环带buffer[0]处但未遍历2880buffer时的逻辑
                 {
                     for (index2 = __instance.bufferLength - 11; __instance.bufferLength - index2 >= 2890 - num7 && index2 > num7; --index2)
                     {
@@ -284,7 +310,7 @@ namespace MoreReasonableCargoTraffic
                         {
                             num8_1 = num8;
                         }
-                        if (num9 == 10 + borrowedBuffer)//num7后找满10+borrowedBuffer个空buffer时移动的buffer数
+                        if (num9 == 10 + borrowedBuffer)
                         {
                             num8 = num8_1;
                             num9 = 10;

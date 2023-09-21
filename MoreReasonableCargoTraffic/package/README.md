@@ -31,6 +31,10 @@
   * Fixed a bug where two branches could not reach maximum flow when merging into a short main path and entering a building such as a logistics tower, but the bug fixed in 1.2.0 can be repeated again
   * 修复当两条支路并入一节短主路后并进入物流塔等建筑时无法达到最大流量的bug,但是1.2.0版本修复的bug可以再次复现
 
+* 1.2.2
+  * Reduce some unnecessary operations
+  * 减少一些不必要的运算
+
 ## Future versions(Maybe)
 *  Reduce the computational overhead for fixing the loop belt stalling bug.(Currently, in typical scenarios, there isn't much additional computation involved. Even in the case of heavy use of closed loop of belts, the expected extra computation load should not exceed 1%. However, it's important to note that these computations are not entirely avoidable. There's an alternative method that involves making changes to the structure of the "CargoPath Class", which would affect the compatibility of save files with and without this mod. Therefore, I don't plan to make any changes until I acquire more modding skills.
 
