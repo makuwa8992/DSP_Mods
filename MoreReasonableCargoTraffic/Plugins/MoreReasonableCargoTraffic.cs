@@ -9,7 +9,7 @@ using BepInEx;
 
 namespace MoreReasonableCargoTraffic
 {
-    [BepInPlugin("shisang_MoreReasonableCargoTraffic", "MoreReasonableCargoTraffic", "1.2.2")]
+    [BepInPlugin("shisang_MoreReasonableCargoTraffic", "MoreReasonableCargoTraffic", "1.2.3")]
     public class MoreReasonableCargoTraffic : BaseUnityPlugin
     {
         void Awake()
@@ -35,6 +35,7 @@ namespace MoreReasonableCargoTraffic
         {
             if (__instance.outputPath != null)
             {
+                //以下为改动点1
                 int outputChunk = __instance.outputChunk;
                 if (outputChunk > __instance.outputPath.chunkCount - 1)
                 {
@@ -155,7 +156,7 @@ namespace MoreReasonableCargoTraffic
                             num1 = num4;
                     }
                 }
-                //改动点3：每帧刷新后解线程锁前更新lastUpdate
+                //改动点3每帧刷新后解线程锁前更新lastUpdate
                 __instance.lastUpdate = (bool)((GameMain.gameTick & 1) == 1);
             }
             return false;
@@ -263,7 +264,11 @@ namespace MoreReasonableCargoTraffic
                         borrowedBuffer += 1;
                     }
                 }
-            }//判断目标带是环带时，通过遍历末10节buffer中非空buffer数来决定borrowedBuffer的大小
+                if (num7 > __instance.bufferLength - 11)
+                {
+                    borrowedBuffer += num7 - __instance.bufferLength + 11;
+                }
+            }//判断目标带是环带时，通过遍历末10节buffer中非空buffer数来决定borrowedBuffer的大小\
             for (int index2 = num7; index2 >= num7 - 2880 && index2 >= 0; --index2)
             {
                 if (__instance.buffer[index2] == (byte)0)
@@ -285,7 +290,7 @@ namespace MoreReasonableCargoTraffic
                 {
                     num8_1 = num8;//num8_1是临时用于记录num8的值的，num8是num7(插入点)后的连续空隙数，num9是累计空隙数，如果num8＞10的话会导致之后的逻辑出问题，所以这边我用这句逻辑保证连续空隙数>10的时候num8也不会大于10
                 }
-                if (num9 == 10 + borrowedBuffer)//num7后找满10+borrowedBuffer个空buffer时移动的buffer数
+                if (num9 == 10 + borrowedBuffer)//插入点后找满10+borrowedBuffer个空buffer时移动的buffer数才判定为可插入
                 {
                     num8 = num8_1;
                     num9 = 10;
@@ -298,7 +303,7 @@ namespace MoreReasonableCargoTraffic
                     flag3 = true;
                     break;
                 }
-                if (__instance.closed && index2 == 0 && num7 > 9)//遍历到环带buffer[0]处但未遍历2880buffer时的逻辑
+                if (__instance.closed && index2 == 0 && num7 > 9 && num7 < __instance.bufferLength - 11)//遍历到环带buffer[0]处但未遍历2880buffer时的逻辑
                 {
                     for (index2 = __instance.bufferLength - 11; __instance.bufferLength - index2 >= 2890 - num7 && index2 > num7; --index2)
                     {
@@ -385,7 +390,7 @@ namespace MoreReasonableCargoTraffic
                         flag1 = true;
                         break;
                     }
-                }//index1指向最下游空格
+                }
                 if (!flag1)
                 {
                     __result = false;
@@ -434,8 +439,8 @@ namespace MoreReasonableCargoTraffic
                     __result = false;
                     return false;
                 }
-                int num7 = index + 5;//num7=index1也是货物最下游
-                int index2 = index - 4;//货物最上游，判断方式是因为下游不可能有其他货物，所以此处空必然连着下游连续空
+                int num7 = index + 5;
+                int index2 = index - 4;
                 int borrowedBuffer = 0;
                 if (__instance.closed)
                 {
@@ -445,6 +450,10 @@ namespace MoreReasonableCargoTraffic
                         {
                             borrowedBuffer += 1;
                         }
+                    }
+                    if (num7 > __instance.bufferLength - 11)
+                    {
+                        borrowedBuffer += num7 - __instance.bufferLength + 11;
                     }
                 }
                 if (index2 - borrowedBuffer < 0)
@@ -490,7 +499,7 @@ namespace MoreReasonableCargoTraffic
                             flag3 = true;
                             break;
                         }
-                        if (__instance.closed && index3 == 0 && num7 > 9)
+                        if (__instance.closed && index3 == 0 && num7 > 9 && num7 < __instance.bufferLength - 11)
                         {
                             for (index3 = __instance.bufferLength - 10; __instance.bufferLength - index3 >= 2890 - num7 && index3 > num7; --index3)
                             {
@@ -502,7 +511,7 @@ namespace MoreReasonableCargoTraffic
                                 {
                                     num9_1 = num9;
                                 }
-                                if (num10 == 10 + borrowedBuffer)//num7后找满10+borrowedBuffer个空buffer时移动的buffer数
+                                if (num10 == 10 + borrowedBuffer)
                                 {
                                     num9 = num9_1;
                                     num10 = 10;
