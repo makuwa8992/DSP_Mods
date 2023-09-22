@@ -18,7 +18,7 @@
   * 因为1.0.0版本有恶性bug(并入环带时可能发生数组越界)，所以此处回退到0.0.1，请等待修复
 
 * 1.1.0
-  * Fix the bug that can cause a stoppage when inserting a closed loop of belts and reaching maximum capacity.
+  * Fix the bug that could cause a stoppage when inserting a closed loop of belts and reaching maximum capacity.
   * 修复插入环带使其达到最大容量时可能导致环带停转的bug
   * Fix the bug that when inserting a lower belt which is connected to a higher belt, it may input with higher throughput than the lower belt's maximum throughput
   * 修复插入一节后面跟着高级传送带的低级传送带时可能导致超出低级传送带运力的输入量的bug
@@ -34,6 +34,12 @@
 * 1.2.2
   * Reduce some unnecessary operations
   * 减少一些不必要的运算
+
+* 1.2.3
+  * Fixed the bug that also could cause a stoppage when inserting the tail node of a closed loop of belts
+  * 修复插入环带尾节点时仍可能导致爆带插入的bug
+  * Add source URL
+  * 加入源码网址
 
 ## Future versions(Maybe)
 *  Reduce the computational overhead for fixing the loop belt stalling bug.(Currently, in typical scenarios, there isn't much additional computation involved. Even in the case of heavy use of closed loop of belts, the expected extra computation load should not exceed 1%. However, it's important to note that these computations are not entirely avoidable. There's an alternative method that involves making changes to the structure of the "CargoPath Class", which would affect the compatibility of save files with and without this mod. Therefore, I don't plan to make any changes until I acquire more modding skills.
