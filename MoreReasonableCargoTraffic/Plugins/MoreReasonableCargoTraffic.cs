@@ -9,7 +9,7 @@ using BepInEx;
 
 namespace MoreReasonableCargoTraffic
 {
-    [BepInPlugin("shisang_MoreReasonableCargoTraffic", "MoreReasonableCargoTraffic", "1.2.3")]
+    [BepInPlugin("shisang_MoreReasonableCargoTraffic", "MoreReasonableCargoTraffic", "1.2.4")]
     public class MoreReasonableCargoTraffic : BaseUnityPlugin
     {
         void Awake()
@@ -43,7 +43,7 @@ namespace MoreReasonableCargoTraffic
                 }
                 int left = 0;
                 int right = __instance.outputPath.chunkCount;
-                int speed = 5;
+                int speed;
                 while (true)
                 {
                     if(__instance.outputPath.chunks[outputChunk*3] > __instance.outputIndex)
@@ -61,10 +61,6 @@ namespace MoreReasonableCargoTraffic
                         __instance.outputChunk = outputChunk;
                         speed = __instance.outputPath.chunks[outputChunk * 3 + 2];
                         break;
-                    }
-                    if(left == outputChunk || right == outputChunk)
-                    {
-                        Debug.Log("出现错误，没法找到并带节");
                     }
                 }//改动点1：从上次记录点开始二分查找目标节点的id，已获得速度，不改变线路构造的情况下查找的第一个就是目标节点
 
@@ -85,8 +81,8 @@ namespace MoreReasonableCargoTraffic
                                     __instance.updateLen = __instance.bufferLength;
                                 }
                             }
-                            // TryInsertCargo中的第一个参数为改动点2，根据输出目标线路此帧是否以刷新来决定是否下移outputIndex(还有一些判断是为了防之后的逻辑中index超出bufferLength做的调整)
-                            else if (__instance.outputPath.TryInsertCargo(__instance.lastUpdate == __instance.outputPath.lastUpdate ? __instance.outputIndex : (__instance.outputIndex + speed + 6 > __instance.outputPath.bufferLength ? __instance.outputPath.bufferLength - 6 : __instance.outputIndex + speed), cargoId))
+                            // TryInsertCargo中的第一个参数为改动点2，根据输出目标线路此帧是否已刷新来决定是否下移outputIndex(还有一些判断是为了防之后的逻辑中index超出bufferLength做的调整)
+                            else if (__instance.outputPath.TryInsertCargo(__instance.lastUpdate == __instance.outputPath.lastUpdate ? __instance.outputIndex : (__instance.outputIndex + speed > __instance.outputPath.bufferLength - 5 ? __instance.outputPath.bufferLength - 6 : __instance.outputIndex + speed - 1 ), cargoId))
                             {
                                 Array.Clear((Array)__instance.buffer, index - 4, 10);
                                 __instance.updateLen = __instance.bufferLength;
@@ -156,8 +152,8 @@ namespace MoreReasonableCargoTraffic
                             num1 = num4;
                     }
                 }
-                //改动点3每帧刷新后解线程锁前更新lastUpdate
-                __instance.lastUpdate = (bool)((GameMain.gameTick & 1) == 1);
+                //改动点3：每帧刷新后解线程锁前更新lastUpdate
+                __instance.lastUpdate = (GameMain.gameTick & 1) == 1;
             }
             return false;
         }
