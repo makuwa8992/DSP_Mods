@@ -3,4 +3,8 @@
 
 ## [MoreReasonableCargoTraffic](MoreReasonableCargoTraffic)
 
-fixed some bugs when merging the belts or inserting cargoes in a closed loop of belts/修复环带插入爆带和并带不满的bug
+* introduce/介绍
+  * Revise the logic of the conveyor belts to make them more Reasonable./对传送带的逻辑进行改进以更符合直觉
+
+* url/mod链接: 
+  * [https://dsp.thunderstore.io/package/shisang_makuwa/MoreReasonableCargoTraffic/](https://dsp.thunderstore.io/package/shisang_makuwa/MoreReasonableCargoTraffic/)

@@ -9,7 +9,7 @@ using BepInEx;
 
 namespace MoreReasonableCargoTraffic
 {
-    [BepInPlugin("shisang_MoreReasonableCargoTraffic", "MoreReasonableCargoTraffic", "1.2.4")]
+    [BepInPlugin("shisang_MoreReasonableCargoTraffic", "MoreReasonableCargoTraffic", "1.2.5")]
     public class MoreReasonableCargoTraffic : BaseUnityPlugin
     {
         void Awake()
@@ -82,7 +82,7 @@ namespace MoreReasonableCargoTraffic
                                 }
                             }
                             // TryInsertCargo中的第一个参数为改动点2，根据输出目标线路此帧是否已刷新来决定是否下移outputIndex(还有一些判断是为了防之后的逻辑中index超出bufferLength做的调整)
-                            else if (__instance.outputPath.TryInsertCargo(__instance.lastUpdate == __instance.outputPath.lastUpdate ? __instance.outputIndex : (__instance.outputIndex + speed > __instance.outputPath.bufferLength - 5 ? __instance.outputPath.bufferLength - 6 : __instance.outputIndex + speed - 1 ), cargoId))
+                            else if (__instance.outputPath.TryInsertCargo(__instance.lastUpdate == __instance.outputPath.lastUpdate ? __instance.outputIndex : (__instance.outputIndex + speed > __instance.outputPath.bufferLength - 6 ? __instance.outputPath.bufferLength - 6 : __instance.outputIndex + speed ), cargoId))
                             {
                                 Array.Clear((Array)__instance.buffer, index - 4, 10);
                                 __instance.updateLen = __instance.bufferLength;
@@ -95,6 +95,8 @@ namespace MoreReasonableCargoTraffic
                 return false;
             lock (__instance.buffer)
             {
+                //改动点3：每帧刷新后解线程锁前更新lastUpdate
+                __instance.lastUpdate = (GameMain.gameTick & 1) == 1;
                 for (int index = __instance.updateLen - 1; index >= 0 && __instance.buffer[index] != (byte)0; --index)
                     --__instance.updateLen;
                 if (__instance.updateLen == 0)
@@ -152,8 +154,6 @@ namespace MoreReasonableCargoTraffic
                             num1 = num4;
                     }
                 }
-                //改动点3：每帧刷新后解线程锁前更新lastUpdate
-                __instance.lastUpdate = (GameMain.gameTick & 1) == 1;
             }
             return false;
         }
