@@ -8,3 +8,11 @@
 
 * url/mod链接: 
   * [https://dsp.thunderstore.io/package/shisang_makuwa/MoreReasonableCargoTraffic/](https://dsp.thunderstore.io/package/shisang_makuwa/MoreReasonableCargoTraffic/)
+
+## [LongerBelts](LongerBelts)
+
+* introduce/介绍
+  * Build longer conveyor belts in geodesic mode/在测地线模式下默认建造更长的传送带
+
+* url/mod链接: 
+  * [https://dsp.thunderstore.io/package/shisang_makuwa/LongerBelts/](https://dsp.thunderstore.io/package/shisang_makuwa/LongerBelts/)
