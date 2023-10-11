@@ -1,21 +1,95 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using HarmonyLib;
 using UnityEngine;
 using BepInEx;
+using BepInEx.Configuration;
 
 namespace LongerBelts
 {
-    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.0.0")]
+    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.1.0")]
+
     public class LongerBelts : BaseUnityPlugin
     {
+        private bool DisplayingWindow = false;
+        // 启动按键
+        private ConfigEntry<KeyboardShortcut> SettingWindow{ get; set; }
+        private Rect windowRect = new Rect(200, 200, 550, 300);
+        static public bool shortest_unlimit = false;
+        static public float current_distance = 1.9f;
+        static public float minimum_distance = 0.400001f;
+        private float maxmum_distance = 2.302172f;
+        static public int pathMode = 0;
+        private string[] pathModeStrings = { "原版升降逻辑", "阿基米德螺线型升降(端点不水平，常规游戏需先在两端拉好水平带\n建议配合如建筑铺设无条件等放宽传送带铺设条件的功能使用)"};
+
         void Awake()
         {
             Harmony.CreateAndPatchAll(typeof(LongerBelts));
             Debug.Log("Add LongerBelts");
+        }
+        void Start()
+        {
+            SettingWindow = Config.Bind("打开窗口快捷键", "Key", new KeyboardShortcut(KeyCode.Alpha3, KeyCode.R));
+            Debug.Log("快捷键已启用");
+        }
+
+        void Update()
+        {
+            if (SettingWindow.Value.IsDown())
+            {
+                DisplayingWindow = !DisplayingWindow;
+            }
+        }
+
+        private void OnGUI()
+        {
+            GUI.backgroundColor = Color.gray;
+            if (DisplayingWindow)
+            {
+                windowRect = GUI.Window(20231008, windowRect, SetLongerBelts, "LongerBelts");
+            }
+        }
+
+        public void SetLongerBelts(int winId)
+        {
+            GUI.DragWindow(new Rect(0, 0, windowRect.width, 20));
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("最大间距设置(注意单位为米而非格)", GUILayout.Width(260f));
+            current_distance = GUILayout.HorizontalSlider(current_distance, minimum_distance, maxmum_distance, GUILayout.Width(100f));
+            string input_distance = GUILayout.TextField(current_distance.ToString(), GUILayout.Width(140f));
+            float temp_distance;
+			if (float.TryParse(input_distance,out temp_distance))
+			{
+                if(temp_distance < maxmum_distance && temp_distance > minimum_distance)
+			    {
+                    current_distance = temp_distance;
+                }
+			}
+            GUILayout.EndHorizontal();
+            GUILayout.BeginVertical();
+            GUILayout.Label("传送带路径");
+            pathMode = GUILayout.SelectionGrid(pathMode, pathModeStrings, 1, "toggle");
+            GUILayout.Label("");
+            GUILayout.Label("下列功能慎用!");
+            shortest_unlimit = GUILayout.Toggle(shortest_unlimit, "勾选启用弱约束间距输入框(常规游戏中会出现传送带过短或过长等错误\n即使使用无条件铺设也可能触发特殊bug,造出的蓝图也未必能用)");
+            GUILayout.EndVertical();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("弱约束间距输入框(配合铺设无条件作弊、测试用):", GUILayout.Width(360f));
+            string unlimited_input_distance = GUILayout.TextField(current_distance.ToString(), GUILayout.Width(140f));
+            if (float.TryParse(unlimited_input_distance, out temp_distance) && shortest_unlimit)
+            {
+                if (temp_distance < 0.001f) temp_distance = 0.001f;
+                if(temp_distance > 999f) temp_distance = 999f;
+                current_distance = temp_distance;
+            }
+            GUILayout.EndHorizontal();
+            EatInputInRect(windowRect);
+        }
+        public static void EatInputInRect(Rect eatRect)
+        {
+            if (!(Input.GetMouseButton(0) || Input.GetMouseButtonDown(0))) //Eat only when left-click
+                return;
+            if (eatRect.Contains(new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y)))
+                Input.ResetInputAxes();
         }
 
         [HarmonyPrefix]
@@ -48,12 +122,49 @@ namespace LongerBelts
             {
                 if (path == 2)
                 {
-                    //测地线模式线路节点坐标生成改动处
+                    //额外测地线模式线路节点坐标生成改动处
                     float max_radius = begin.magnitude > end.magnitude ? begin.magnitude : end.magnitude;
                     Vector3 beginNormalized = begin.normalized;
                     Vector3 endNormalized = end.normalized;
-                    double distance = Mathf.Acos(Vector3.Dot(beginNormalized, endNormalized)) * max_radius / 2.1;
-                    int num10 = distance > 0.1 ? (int)distance + 1 : 0;
+                    float nodes_counts;
+                    float geodesic_distance = Mathf.Acos(Vector3.Dot(beginNormalized, endNormalized)) * max_radius;
+                    int num10;
+                    if (LongerBelts.pathMode == 1)
+					{
+                        float beginMagnitude = begin.magnitude;
+                        float endMagnitude = end.magnitude;
+                        float delta_height = Mathf.Abs(endMagnitude - beginMagnitude);//起止点高度差
+                        nodes_counts = Mathf.Sqrt( geodesic_distance * geodesic_distance + delta_height * delta_height) / LongerBelts.current_distance;
+                        if (!LongerBelts.shortest_unlimit && Mathf.Sqrt(geodesic_distance * geodesic_distance + delta_height * delta_height) / ((int)nodes_counts + 1) < LongerBelts.minimum_distance)//实际建造时传送带距离过短判定是<=0.4m
+                        {
+                            nodes_counts = Mathf.Sqrt(geodesic_distance * geodesic_distance + delta_height * delta_height) / LongerBelts.minimum_distance - 1;
+                        }
+                        num10 = nodes_counts > 0.1 ? (int)nodes_counts + 1 : 0;
+                        if (num10 == 0)
+                        {
+                            snaps[num1++] = beginNormalized;
+                        }
+                        else
+                        {
+                            for (int index = 0; index <= num10 && num1 < num2; ++index)
+                            {
+                                float t = (float)index / (float)num10;
+                                snaps[num1++] = Vector3.Slerp(beginNormalized, endNormalized, t).normalized;
+                            }
+                        }
+                        for (int index = 0; index < num1; ++index)
+                        {
+                            snaps[index] *= beginMagnitude * (float)(num1 - 1 - index) / (float)(num1 - 1) + endMagnitude * (float)index / (float)(num1 - 1);
+                        }
+                        __result = num1;
+                        return false;
+					}
+                    nodes_counts = geodesic_distance / LongerBelts.current_distance;
+                    if(!LongerBelts.shortest_unlimit && Mathf.Acos(Vector3.Dot(beginNormalized, endNormalized)) * (begin.magnitude < max_radius ? begin.magnitude : end.magnitude) / ((int)nodes_counts + 1) < LongerBelts.minimum_distance)//实际建造时传送带距离过短判定是<=0.4m
+					{
+                        nodes_counts = (Mathf.Acos(Vector3.Dot(beginNormalized, endNormalized)) * (begin.magnitude < max_radius ? begin.magnitude : end.magnitude) / LongerBelts.minimum_distance) - 1;
+                    }
+                    num10 = nodes_counts > 0.1 ? (int)nodes_counts + 1 : 0;
                     if (num10 == 0)
                     {
                         snaps[num1++] = beginNormalized;
@@ -534,19 +645,19 @@ namespace LongerBelts
                             __instance.geodesic = true;
                         if (__instance.pathAlternative == 1)
                             __instance.pathAlternative = 2;
-                        else if (__instance.pathAlternative == 2)
+                        else
                         {
                             __instance.pathAlternative = 1;
                             __instance.geodesic = true;
                         }
                     }
-					else//此函数唯一改动处，测地线新增一种模式
+					else
 					{
                         if (__instance.pathSuggest > 0)
                             __instance.geodesic = false;
                         if (__instance.pathAlternative == 1)
                             __instance.pathAlternative = 2;
-                        else if (__instance.pathAlternative == 2)
+                        else
                         {
                             __instance.pathAlternative = 1;
                             __instance.geodesic = false;
@@ -601,7 +712,7 @@ namespace LongerBelts
                     Vector3 pathPoint1 = __instance.pathPoints[destinationIndex];
                     Vector3 pathPoint2 = __instance.pathPoints[destinationIndex + 1];
                     Vector3 vector3_11 = pathPoint2 - pathPoint1;
-                    if ((double)vector3_11.sqrMagnitude < 0.5)
+                    if ((double)vector3_11.sqrMagnitude < 1e-6)
                     {
                         __instance.pathPoints[destinationIndex + 1] = __instance.pathPointCount != 2 ? (__instance.pathPointCount != 3 || destinationIndex != 1 || slot1 < 0 || slot2 >= 0 ? (__instance.pathPointCount != 3 || destinationIndex != 0 || slot2 < 0 || slot1 >= 0 ? (destinationIndex != 0 ? (destinationIndex != __instance.pathPointCount - 2 ? pathPoint1 + vector3_11 * 0.5f : pathPoint2) : pathPoint1) : pathPoint2) : pathPoint1) : pathPoint1 + vector3_11 * 0.5f;
                         Array.Copy((Array)__instance.pathPoints, destinationIndex + 1, (Array)__instance.pathPoints, destinationIndex, __instance.pathPointCount - destinationIndex - 1);
