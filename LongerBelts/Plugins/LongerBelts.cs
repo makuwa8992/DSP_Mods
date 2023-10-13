@@ -6,20 +6,21 @@ using BepInEx.Configuration;
 
 namespace LongerBelts
 {
-    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.1.0")]
+    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.2.0")]
 
     public class LongerBelts : BaseUnityPlugin
     {
         private bool DisplayingWindow = false;
         // 启动按键
         private ConfigEntry<KeyboardShortcut> SettingWindow{ get; set; }
-        private Rect windowRect = new Rect(200, 200, 550, 300);
+        private Rect windowRect = new Rect(200, 200, 600, 350);
         static public bool shortest_unlimit = false;
         static public float current_distance = 1.9f;
         static public float minimum_distance = 0.400001f;
-        private float maxmum_distance = 2.302172f;
+        private readonly float maxmum_distance = 2.302172f;
         static public int pathMode = 0;
-        private string[] pathModeStrings = { "原版升降逻辑", "阿基米德螺线型升降(端点不水平，常规游戏需先在两端拉好水平带\n建议配合如建筑铺设无条件等放宽传送带铺设条件的功能使用)"};
+        private int distance_units = 0;
+        private Translate UItexture;
 
         void Awake()
         {
@@ -28,7 +29,7 @@ namespace LongerBelts
         }
         void Start()
         {
-            SettingWindow = Config.Bind("打开窗口快捷键", "Key", new KeyboardShortcut(KeyCode.Alpha3, KeyCode.R));
+            SettingWindow = Config.Bind("打开窗口快捷键/HotKey", "Key", new KeyboardShortcut(KeyCode.Alpha3, KeyCode.R));
             Debug.Log("快捷键已启用");
         }
 
@@ -42,9 +43,10 @@ namespace LongerBelts
 
         private void OnGUI()
         {
-            GUI.backgroundColor = Color.gray;
             if (DisplayingWindow)
             {
+                GUI.backgroundColor = Color.gray;
+                UItexture = Translate.NewTexture(DSPGame.globalOption.language);
                 windowRect = GUI.Window(20231008, windowRect, SetLongerBelts, "LongerBelts");
             }
         }
@@ -53,30 +55,35 @@ namespace LongerBelts
         {
             GUI.DragWindow(new Rect(0, 0, windowRect.width, 20));
             GUILayout.BeginHorizontal();
-            GUILayout.Label("最大间距设置(注意单位为米而非格)", GUILayout.Width(260f));
+            GUILayout.Label(UItexture.distance_setting, GUILayout.Width(300f));
             current_distance = GUILayout.HorizontalSlider(current_distance, minimum_distance, maxmum_distance, GUILayout.Width(100f));
-            string input_distance = GUILayout.TextField(current_distance.ToString(), GUILayout.Width(140f));
-            float temp_distance;
-			if (float.TryParse(input_distance,out temp_distance))
+            string input_distance = GUILayout.TextField((distance_units == 1 ? current_distance / 1.256637f : current_distance).ToString("0.000000"), GUILayout.Width(140f));
+			if (float.TryParse(input_distance,out float temp_distance))
 			{
-                if(temp_distance < maxmum_distance && temp_distance > minimum_distance)
+                if (distance_units == 1) temp_distance *= 1.256637f;
+                if (temp_distance < maxmum_distance && temp_distance > minimum_distance)
 			    {
                     current_distance = temp_distance;
                 }
 			}
             GUILayout.EndHorizontal();
             GUILayout.BeginVertical();
-            GUILayout.Label("传送带路径");
-            pathMode = GUILayout.SelectionGrid(pathMode, pathModeStrings, 1, "toggle");
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(UItexture.distance_units, GUILayout.Width(50f));
+            distance_units = GUILayout.SelectionGrid(distance_units, UItexture.distance_unitsStrings, 2, "toggle", GUILayout.Width(300f));
+            GUILayout.EndHorizontal();
+            GUILayout.Label(UItexture.pathMode);
+            pathMode = GUILayout.SelectionGrid(pathMode, UItexture.pathModeStrings, 1, "toggle");
             GUILayout.Label("");
-            GUILayout.Label("下列功能慎用!");
-            shortest_unlimit = GUILayout.Toggle(shortest_unlimit, "勾选启用弱约束间距输入框(常规游戏中会出现传送带过短或过长等错误\n即使使用无条件铺设也可能触发特殊bug,造出的蓝图也未必能用)");
+            GUILayout.Label(UItexture.WarningNotice);
+            shortest_unlimit = GUILayout.Toggle(shortest_unlimit, UItexture.unlimit_distance_instruction);
             GUILayout.EndVertical();
             GUILayout.BeginHorizontal();
-            GUILayout.Label("弱约束间距输入框(配合铺设无条件作弊、测试用):", GUILayout.Width(360f));
-            string unlimited_input_distance = GUILayout.TextField(current_distance.ToString(), GUILayout.Width(140f));
+            GUILayout.Label(UItexture.unlimit_distance_setting, GUILayout.Width(400f));
+            string unlimited_input_distance = GUILayout.TextField((distance_units == 1 ? current_distance / 1.256637f : current_distance).ToString("0.000000"), GUILayout.Width(140f));
             if (float.TryParse(unlimited_input_distance, out temp_distance) && shortest_unlimit)
             {
+                if (distance_units == 1) temp_distance *= 1.256637f;
                 if (temp_distance < 0.001f) temp_distance = 0.001f;
                 if(temp_distance > 999f) temp_distance = 999f;
                 current_distance = temp_distance;
