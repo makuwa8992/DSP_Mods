@@ -6,7 +6,7 @@ using BepInEx.Configuration;
 
 namespace LongerBelts
 {
-    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.2.0")]
+    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.2.1")]
 
     public class LongerBelts : BaseUnityPlugin
     {
@@ -18,7 +18,7 @@ namespace LongerBelts
         static public float current_distance = 1.9f;
         static public float minimum_distance = 0.400001f;
         private readonly float maxmum_distance = 2.302172f;
-        static public int pathMode = 0;
+        static public int pathMode = 1;
         private int distance_units = 0;
         private Translate UItexture;
 
@@ -134,9 +134,9 @@ namespace LongerBelts
                     Vector3 beginNormalized = begin.normalized;
                     Vector3 endNormalized = end.normalized;
                     float nodes_counts;
-                    float geodesic_distance = Mathf.Acos(Vector3.Dot(beginNormalized, endNormalized)) * max_radius;
+                    float geodesic_distance = Mathf.Acos(Mathf.Clamp(Vector3.Dot(beginNormalized, endNormalized),-1,1)) * max_radius;
                     int num10;
-                    if (LongerBelts.pathMode == 1)
+                    if (LongerBelts.pathMode == 1)//阿基米德螺线模式
 					{
                         float beginMagnitude = begin.magnitude;
                         float endMagnitude = end.magnitude;
@@ -150,6 +150,12 @@ namespace LongerBelts
                         if (num10 == 0)
                         {
                             snaps[num1++] = beginNormalized;
+                            if((double)Mathf.Abs(beginMagnitude - endMagnitude) > 1.0 / 1000.0)
+							{
+                                snaps[num1++] = snaps[0] * endMagnitude;
+                                __result = num1;
+                                return false;
+                            }
                         }
                         else
                         {
@@ -166,7 +172,7 @@ namespace LongerBelts
                         __result = num1;
                         return false;
 					}
-                    nodes_counts = geodesic_distance / LongerBelts.current_distance;
+                    nodes_counts = geodesic_distance / LongerBelts.current_distance;//类似原版逻辑(只是间隔变长了)
                     if(!LongerBelts.shortest_unlimit && Mathf.Acos(Vector3.Dot(beginNormalized, endNormalized)) * (begin.magnitude < max_radius ? begin.magnitude : end.magnitude) / ((int)nodes_counts + 1) < LongerBelts.minimum_distance)//实际建造时传送带距离过短判定是<=0.4m
 					{
                         nodes_counts = (Mathf.Acos(Vector3.Dot(beginNormalized, endNormalized)) * (begin.magnitude < max_radius ? begin.magnitude : end.magnitude) / LongerBelts.minimum_distance) - 1;
@@ -672,6 +678,20 @@ namespace LongerBelts
                     }
                 }
                 int path = __instance.pathSuggest > 0 ? __instance.pathSuggest : (__instance.pathAlternative > 0 ? __instance.pathAlternative : 1);
+                if (__instance.geodesic == true && path == 2)
+                {
+                    // 新模式垂直带水平距离过近调整,保证垂直带坡度<1000,使垂直传送带美观
+                    if ((begin.normalized - end.normalized).magnitude < 0.0001f)//近似于夹角<1e-4即在地面投影的距离<0.02m
+                    {
+                        Vector3 littleOffset = new Vector3(0, 0.001f, 0);
+                        if ((begin.normalized - end.normalized).magnitude < 0.0001f)
+                        {
+                            littleOffset = new Vector3(0.001f, 0, 0);
+                        }
+                        littleOffset = Vector3.Cross(end - begin, littleOffset);//横向偏置=纵向跨度叉乘一个模长为0.001的向量(通常指向北极),相当于保证坡度不大于1000
+                        end += littleOffset;
+                    }
+                }
                 __instance.pathPointCount = __instance.actionBuild.planetAux.SnapLineNonAlloc(begin, end, path, __instance.geodesic, !(flag10 | flag4), __instance.pathPoints);
                 if (__instance.pathPointCount > 0)
                 {
@@ -683,7 +703,7 @@ namespace LongerBelts
                     if (flag4)
                     {
                         vector3_1 = b1 - a1;
-                        if ((double)vector3_1.magnitude > 1.70000004768372)
+                        if ((double)vector3_1.magnitude > 1.70000004768372)//起始端附近带子和光标实际距离较远的情况
                         {
                             Array.Copy((Array)__instance.pathPoints, 0, (Array)__instance.pathPoints, 2, __instance.pathPointCount);
                             __instance.pathPoints[0] = b1;
@@ -695,14 +715,14 @@ namespace LongerBelts
                     Array.Copy((Array)__instance.pathPoints, 0, (Array)__instance.pathPoints, 1, __instance.pathPointCount);
                     __instance.pathPoints[0] = b1;
                     ++__instance.pathPointCount;
-                }
+                }//起始端有别的带子的情况
             label_130:
                 if (slot2 >= 0)
                 {
                     if (flag5)
                     {
                         vector3_1 = b2 - a2;
-                        if ((double)vector3_1.magnitude > 1.70000004768372)
+                        if ((double)vector3_1.magnitude > 1.70000004768372)//末端带子和光标距离较远的情况
                         {
                             __instance.pathPoints[__instance.pathPointCount] = (b2 + a2) * 0.5f;
                             __instance.pathPoints[__instance.pathPointCount + 1] = b2;
@@ -712,14 +732,14 @@ namespace LongerBelts
                     }
                     __instance.pathPoints[__instance.pathPointCount] = b2;
                     ++__instance.pathPointCount;
-                }
+                }//末端有别的带子的情况
             label_135:
                 for (int destinationIndex = 0; destinationIndex < __instance.pathPointCount - 1; ++destinationIndex)
                 {
                     Vector3 pathPoint1 = __instance.pathPoints[destinationIndex];
                     Vector3 pathPoint2 = __instance.pathPoints[destinationIndex + 1];
                     Vector3 vector3_11 = pathPoint2 - pathPoint1;
-                    if ((double)vector3_11.sqrMagnitude < 1e-6)
+                    if ((double)vector3_11.sqrMagnitude < 1e-6)//距离过短,则合并带子
                     {
                         __instance.pathPoints[destinationIndex + 1] = __instance.pathPointCount != 2 ? (__instance.pathPointCount != 3 || destinationIndex != 1 || slot1 < 0 || slot2 >= 0 ? (__instance.pathPointCount != 3 || destinationIndex != 0 || slot2 < 0 || slot1 >= 0 ? (destinationIndex != 0 ? (destinationIndex != __instance.pathPointCount - 2 ? pathPoint1 + vector3_11 * 0.5f : pathPoint2) : pathPoint1) : pathPoint2) : pathPoint1) : pathPoint1 + vector3_11 * 0.5f;
                         Array.Copy((Array)__instance.pathPoints, destinationIndex + 1, (Array)__instance.pathPoints, destinationIndex, __instance.pathPointCount - destinationIndex - 1);
