@@ -6,7 +6,7 @@ using BepInEx.Configuration;
 
 namespace LongerBelts
 {
-    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.2.1")]
+    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.3.0")]
 
     public class LongerBelts : BaseUnityPlugin
     {
@@ -18,9 +18,12 @@ namespace LongerBelts
         static public float current_distance = 1.9f;
         static public float minimum_distance = 0.400001f;
         private readonly float maxmum_distance = 2.302172f;
-        static public int pathMode = 1;
+        static public int pathMode = 0;
+        static public bool longerOnGrid = false;
         private int distance_units = 0;
         private Translate UItexture;
+        static public bool startWithBelt = false;
+        static public bool endWithBelt = false;
 
         void Awake()
         {
@@ -54,6 +57,8 @@ namespace LongerBelts
         public void SetLongerBelts(int winId)
         {
             GUI.DragWindow(new Rect(0, 0, windowRect.width, 20));
+            GUILayout.BeginVertical();
+            longerOnGrid = GUILayout.Toggle(longerOnGrid, UItexture.ifLongerOnGrid);
             GUILayout.BeginHorizontal();
             GUILayout.Label(UItexture.distance_setting, GUILayout.Width(300f));
             current_distance = GUILayout.HorizontalSlider(current_distance, minimum_distance, maxmum_distance, GUILayout.Width(100f));
@@ -67,7 +72,6 @@ namespace LongerBelts
                 }
 			}
             GUILayout.EndHorizontal();
-            GUILayout.BeginVertical();
             GUILayout.BeginHorizontal();
             GUILayout.Label(UItexture.distance_units, GUILayout.Width(50f));
             distance_units = GUILayout.SelectionGrid(distance_units, UItexture.distance_unitsStrings, 2, "toggle", GUILayout.Width(300f));
@@ -112,7 +116,7 @@ namespace LongerBelts
             ref int __result)
         {
             int num1 = 0;
-            int num2 = snaps.Length - 10;
+            int num2 = snaps.Length - 10;//snaps.Length固定为160,num2固定为150,后面生成带子的时候也不会超过150节
             if (num2 == 0)
             {
                 __result = 0;
@@ -124,6 +128,84 @@ namespace LongerBelts
             if (!geodesic)
             {
                 num1 = __instance.activeGrid.SnapLineNonAlloc(begin, end, path, snaps);//段数
+				if (LongerBelts.longerOnGrid)
+				{
+					if (LongerBelts.endWithBelt)
+					{
+                        num1--;
+					}
+                    int new_num1 = 0;
+                    for (int i = 0; i< num1;)
+                    {
+                        if( i + 3 >= num1)
+						{
+                            while(i < num1)
+                            {
+                                snaps[new_num1++] = snaps[i++];
+                            }
+                            break;
+						}
+                        else if(i == 0 && LongerBelts.startWithBelt)
+						{
+                            snaps[new_num1++] = snaps[i++];
+                        }
+                        else if(Mathf.Abs(Mathf.Asin(snaps[i + 1].y) - Mathf.Asin(snaps[i].y)) < 0.001)//纬度相同
+						{
+                            for(int j = 1;j < 3; j++)
+							{
+                                if(Mathf.Abs(Mathf.Asin(snaps[i + j + 1].y) - Mathf.Asin(snaps[i + j].y)) > 0.001)
+								{
+                                    for(int k = 0;k < j; k++)
+									{
+                                        snaps[new_num1++] = snaps[i + k];
+                                    }
+                                    i += j;
+                                    break;
+								}
+                                else if(j == 2)
+								{
+                                    snaps[new_num1++] = snaps[i];
+                                    float f2 = Mathf.Asin(snaps[i].y);
+                                    float f3 = (Mathf.Atan2(snaps[i].x, -snaps[i].z) + Mathf.Atan2(snaps[i + 3].x, -snaps[i + 3].z)) / 2;
+                                    snaps[new_num1++] = new Vector3(Mathf.Cos(f2) * Mathf.Sin(f3), Mathf.Sin(f2), Mathf.Cos(f2) * -Mathf.Cos(f3));
+                                    i += 3;
+                                }
+							}
+						}
+                        else if(Mathf.Abs(Mathf.Atan2(snaps[i + 1].x, -snaps[i + 1].z) - Mathf.Atan2(snaps[i].x, -snaps[i].z)) < 1e-3)//经度相同
+						{
+                            for (int j = 1; j < 3; j++)
+                            {
+                                if (Mathf.Abs(Mathf.Atan2(snaps[i+j+1].x, -snaps[i + j + 1].z) - Mathf.Atan2(snaps[i + j].x, -snaps[i + j].z)) > 0.001)
+                                {
+                                    for (int k = 0; k < j; k++)
+                                    {
+                                        snaps[new_num1++] = snaps[i + k];
+                                    }
+                                    i += j;
+                                    break;
+                                }
+                                else if (j == 2)
+                                {
+                                    snaps[new_num1++] = snaps[i];
+                                    float f2 = (Mathf.Asin(snaps[i].y) + Mathf.Asin(snaps[i + 3].y))/2;
+                                    float f3 = Mathf.Atan2(snaps[i].x, -snaps[i].z);
+                                    snaps[new_num1++] = new Vector3(Mathf.Cos(f2) * Mathf.Sin(f3), Mathf.Sin(f2), Mathf.Cos(f2) * -Mathf.Cos(f3));
+                                    i += 3;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            snaps[new_num1++] = snaps[i++];
+                        }
+                    }
+                    if (LongerBelts.endWithBelt)
+                    {
+                        snaps[new_num1++] = snaps[num1];
+                    }
+                    num1 = new_num1;
+                }
             }
             else
             {
@@ -692,6 +774,8 @@ namespace LongerBelts
                         end += littleOffset;
                     }
                 }
+                startWithBelt = __instance.startObjectId != 0 && __instance.ObjectIsBelt(__instance.startObjectId);
+                endWithBelt = __instance.castObjectId != 0 && __instance.ObjectIsBelt(__instance.castObjectId);
                 __instance.pathPointCount = __instance.actionBuild.planetAux.SnapLineNonAlloc(begin, end, path, __instance.geodesic, !(flag10 | flag4), __instance.pathPoints);
                 if (__instance.pathPointCount > 0)
                 {

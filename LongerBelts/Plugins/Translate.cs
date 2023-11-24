@@ -8,6 +8,7 @@ namespace LongerBelts
 {
 	class Translate
 	{
+		public string ifLongerOnGrid;
 		public string distance_setting;
 		public string distance_units;
 		public string[] distance_unitsStrings = {"米", "格(赤道)" };
@@ -21,6 +22,7 @@ namespace LongerBelts
 			Translate texture = new Translate();
 			if(language == Language.zhCN)
 			{
+				texture.ifLongerOnGrid = "经纬线模式默认跨度1.5格";
 				texture.distance_setting = "最大间距设置";
 				texture.distance_units = "单位:";
 				texture.distance_unitsStrings[0] = "米";
@@ -34,6 +36,7 @@ namespace LongerBelts
 			}
 			else if(language == Language.enUS)
 			{
+				texture.ifLongerOnGrid = "Gridline mode default span 1.5 units";
 				texture.distance_setting = "Maximum Spacing(unit: meters, not grid)";
 				texture.distance_units = "Units:";
 				texture.distance_unitsStrings[0] = "meters";
