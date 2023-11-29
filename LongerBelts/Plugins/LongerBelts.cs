@@ -6,25 +6,27 @@ using BepInEx.Configuration;
 
 namespace LongerBelts
 {
-    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.3.0")]
+    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.4.0")]
 
     public class LongerBelts : BaseUnityPlugin
     {
         private bool DisplayingWindow = false;
         // 启动按键
         private ConfigEntry<KeyboardShortcut> SettingWindow{ get; set; }
-        private Rect windowRect = new Rect(200, 200, 600, 350);
+        private Rect windowRect = new Rect(200, 200, 600, 400);
         static public bool shortest_unlimit = false;
         static public float current_distance = 1.9f;
+        static public float longitudeDistance = 1.75f;
+        static public float latitudeDistance = 1.5f;
         static public float minimum_distance = 0.400001f;
         private readonly float maxmum_distance = 2.302172f;
         static public int pathMode = 0;
         static public bool longerOnGrid = false;
         private int distance_units = 0;
         private Translate UItexture;
-        static public bool startWithBelt = false;
-        static public bool endWithBelt = false;
-
+        //static public bool startWithBelt = false;
+        //static public bool endWithBelt = false;
+        static public float test;
         void Awake()
         {
             Harmony.CreateAndPatchAll(typeof(LongerBelts));
@@ -60,10 +62,32 @@ namespace LongerBelts
             GUILayout.BeginVertical();
             longerOnGrid = GUILayout.Toggle(longerOnGrid, UItexture.ifLongerOnGrid);
             GUILayout.BeginHorizontal();
+            GUILayout.Label(UItexture.longitudeDistance, GUILayout.Width(140f));
+            longitudeDistance = GUILayout.HorizontalSlider(longitudeDistance, 0.001f, 3f, GUILayout.Width(80f));
+            string input_distance = GUILayout.TextField(longitudeDistance.ToString("0.000"), GUILayout.Width(50f));
+            if (float.TryParse(input_distance, out float temp_distance))
+            {
+                if (temp_distance < maxmum_distance && temp_distance > minimum_distance)
+                {
+                    longitudeDistance = temp_distance;
+                }
+            }
+            GUILayout.Label(UItexture.latitudeDistance, GUILayout.Width(140f));
+            latitudeDistance = GUILayout.HorizontalSlider(latitudeDistance, 0.001f, 3f, GUILayout.Width(80f));
+            input_distance = GUILayout.TextField(latitudeDistance.ToString("0.000"), GUILayout.Width(50f));
+            if (float.TryParse(input_distance, out temp_distance))
+            {
+                if (temp_distance < maxmum_distance && temp_distance > minimum_distance)
+                {
+                    latitudeDistance = temp_distance;
+                }
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
             GUILayout.Label(UItexture.distance_setting, GUILayout.Width(300f));
             current_distance = GUILayout.HorizontalSlider(current_distance, minimum_distance, maxmum_distance, GUILayout.Width(100f));
-            string input_distance = GUILayout.TextField((distance_units == 1 ? current_distance / 1.256637f : current_distance).ToString("0.000000"), GUILayout.Width(140f));
-			if (float.TryParse(input_distance,out float temp_distance))
+            input_distance = GUILayout.TextField((distance_units == 1 ? current_distance / 1.256637f : current_distance).ToString("0.000000"), GUILayout.Width(140f));
+			if (float.TryParse(input_distance,out temp_distance))
 			{
                 if (distance_units == 1) temp_distance *= 1.256637f;
                 if (temp_distance < maxmum_distance && temp_distance > minimum_distance)
@@ -103,6 +127,98 @@ namespace LongerBelts
                 Input.ResetInputAxes();
         }
 
+        [HarmonyPatch(typeof(PlanetGrid))]
+        public static int LongerSnapLineNonAlloc(PlanetGrid __instance , Vector3 begin, Vector3 end, int path, Vector3[] snaps)
+        {
+            int num1 = snaps.Length - 10;//snaps.Length在某个地方初始化的时候是160,不知道这里过程中有没有改,即snaps最多生成160个,num1=150
+            if (num1 <= 0)
+                return 0;
+            begin.Normalize();
+            end.Normalize();
+            float f1 = Mathf.Asin(begin.y);//起始点纬度90°S~90°N对应[-π/2,π/2]
+            float num2 = Mathf.Atan2(begin.x, -begin.z);//起始点经度arctan(-x/z),范围[-π,π]
+            float num3 = Mathf.Asin(end.y);//终止点纬度
+            float num4 = Mathf.Atan2(end.x, -end.z);//终止点经度
+            float f2 = Mathf.Repeat(num4 - num2, 6.283185f);//f2 = num4-num2±2kπ,f2∈[0,2π]，始末端点的经度跨度
+            float heigherLatitude = Mathf.Max(Mathf.Abs(f1), Mathf.Abs(num3));
+            Vector3 beginNormalized = begin.normalized;
+            Vector3 endNormalized = end.normalized;
+            int count = 0;
+            snaps[count++] = beginNormalized;
+            if ((double)f2 > 3.14159274101257)
+                f2 -= 6.283185f;//f2 = num4-num2±2kπ,f2∈[-π,π]
+            if (path == 1)//先沿纬线走,再沿经线走
+            {
+                float longitudeSegmentCount = (float)PlanetGrid.DetermineLongitudeSegmentCount(Mathf.FloorToInt(Mathf.Max(0.0f, Mathf.Abs(f1 / 6.283185f * (float)__instance.segment) - 0.1f)), __instance.segment);//起始点维度的经线分割数/5
+                if ((Mathf.Abs(f2) - 1.57079637f) * longitudeSegmentCount > (1.57079637f - heigherLatitude) * 200)
+				{
+                    if (f2 > 0)
+					{
+                        f2 -= 3.141593f;//f2∈[-π,π]
+                    }
+					else
+					{
+                        f2 += 3.141593f;//f2∈[-π,π]
+                    }
+                    num3 = (double)num3 < 0.0 ? -3.141593f - num3 : 3.141593f - num3;//num3∈[-π,-π/2]∪[π/2,π]意义:2*π/2-num3,意思就是对着90°的极点翻转到另一端
+                }
+                float longitude1 = num2 + f2;//目标点的假想经度
+                float f3 = num3 - f1;//目标点纬度跨度
+                int longitudeSnaps = (int)(Mathf.Abs(f2) / 1.2566370614357f * longitudeSegmentCount / LongerBelts.latitudeDistance) + 1;//沿纬线总步数
+                LongerBelts.test = longitudeSegmentCount;
+                int latitudeSnaps = (int)(Mathf.Abs(f3) / 0.0062831853f / LongerBelts.longitudeDistance) + 1;//沿经线总步数
+                float num8 = Mathf.Cos(f1);//起始点纬线的半径
+                for (int index = 1; index <= longitudeSnaps; ++index)//沿纬线走,根据经度生成坐标
+                {
+                    float t = f2 * (float)index / (float)longitudeSnaps;
+                    snaps[count++] = new Vector3(num8 * Mathf.Sin(num2 + t), Mathf.Sin(f1), -num8 * Mathf.Cos(num2 + t));
+                }
+                Vector3 midNormalized = new Vector3(num8 * Mathf.Sin(longitude1), Mathf.Sin(f1), -num8 * Mathf.Cos(longitude1));//中间点
+                for (int index = 1; index <= latitudeSnaps; ++index)//沿经线走,直接插值
+                {
+                    float t = (float)index / (float)latitudeSnaps;
+                    snaps[count++] = Vector3.Slerp(midNormalized, endNormalized, t).normalized;
+                }
+                return count;
+            }
+            else//先沿经线走,再沿纬线走
+            {
+                float longitudeSegmentCount = (float)PlanetGrid.DetermineLongitudeSegmentCount(Mathf.FloorToInt(Mathf.Max(0.0f, Mathf.Abs(num3 / 6.283185f * (float)__instance.segment) - 0.1f)), __instance.segment);//终止点维度的经线分割数/5
+                if ((Mathf.Abs(f2) - 1.57079637f) * longitudeSegmentCount > (1.57079637f - heigherLatitude) * 200)
+                {
+                    if (f2 > 0)
+                    {
+                        f2 -= 3.141593f;//f2∈[2-π,2]
+                    }
+                    else
+                    {
+                        f2 += 3.141593f;//f2∈[2-π,2]
+                    }
+                    num3 = (double)num3 < 0.0 ? -3.141593f - num3 : 3.141593f - num3;//num3∈[-π,π]意义:2*π/2-num3,意思就是对着90°的极点翻转到另一端
+                }
+                float longitude1 = num2 + f2;//目标点经度
+                float f3 = num3 - f1;//目标点纬度跨度
+                int longitudeSnaps = (int)(Mathf.Abs(f2) / 1.2566370614357f * longitudeSegmentCount / LongerBelts.latitudeDistance) + 1;//沿纬线总步数
+                int latitudeSnaps = (int)(Mathf.Abs(f3) / 0.0062831853f / LongerBelts.longitudeDistance) + 1;//沿经线总步数
+                float num8 = Mathf.Cos(num3);//目标点纬线的半径(这里实际上是负的)
+                Vector3 midNormalized = new Vector3(num8 * Mathf.Sin(num2), Mathf.Sin(num3), -num8 * Mathf.Cos(num2));//中间点
+                for (int index = 1; index <= latitudeSnaps; ++index)//沿经线走,直接插值
+                {
+                    float t = (float)index / (float)latitudeSnaps;
+                    snaps[count++] = Vector3.Slerp(beginNormalized, midNormalized, t).normalized;
+                }
+                float midLongitude = Mathf.Atan2(midNormalized.x, -midNormalized.z);
+                float endLongitude = Mathf.Atan2(end.x, -end.z);
+                for (int index = 1; index <= longitudeSnaps; ++index)//沿纬线走,根据经度生成坐标
+                {
+                    float t = num2 + ((float)index / (float)longitudeSnaps) * f2;
+                    snaps[count++] = new Vector3(num8 * Mathf.Sin(t), Mathf.Sin(num3), -num8 * Mathf.Cos(t));//num3可能>90°,此时num8是负数,sin(num3) = sin(180°-num3)
+                }
+                return count;
+            }
+            
+        }
+
         [HarmonyPrefix]
         [HarmonyPatch(typeof(PlanetAuxData), "SnapLineNonAlloc")]
         public static bool PlanetAuxData_SnapLineNonAlloc_Prefix(
@@ -127,85 +243,14 @@ namespace LongerBelts
                 geodesic = true;
             if (!geodesic)
             {
-                num1 = __instance.activeGrid.SnapLineNonAlloc(begin, end, path, snaps);//段数
 				if (LongerBelts.longerOnGrid)
 				{
-					if (LongerBelts.endWithBelt)
-					{
-                        num1--;
-					}
-                    int new_num1 = 0;
-                    for (int i = 0; i< num1;)
-                    {
-                        if( i + 3 >= num1)
-						{
-                            while(i < num1)
-                            {
-                                snaps[new_num1++] = snaps[i++];
-                            }
-                            break;
-						}
-                        else if(i == 0 && LongerBelts.startWithBelt)
-						{
-                            snaps[new_num1++] = snaps[i++];
-                        }
-                        else if(Mathf.Abs(Mathf.Asin(snaps[i + 1].y) - Mathf.Asin(snaps[i].y)) < 0.001)//纬度相同
-						{
-                            for(int j = 1;j < 3; j++)
-							{
-                                if(Mathf.Abs(Mathf.Asin(snaps[i + j + 1].y) - Mathf.Asin(snaps[i + j].y)) > 0.001)
-								{
-                                    for(int k = 0;k < j; k++)
-									{
-                                        snaps[new_num1++] = snaps[i + k];
-                                    }
-                                    i += j;
-                                    break;
-								}
-                                else if(j == 2)
-								{
-                                    snaps[new_num1++] = snaps[i];
-                                    float f2 = Mathf.Asin(snaps[i].y);
-                                    float f3 = (Mathf.Atan2(snaps[i].x, -snaps[i].z) + Mathf.Atan2(snaps[i + 3].x, -snaps[i + 3].z)) / 2;
-                                    snaps[new_num1++] = new Vector3(Mathf.Cos(f2) * Mathf.Sin(f3), Mathf.Sin(f2), Mathf.Cos(f2) * -Mathf.Cos(f3));
-                                    i += 3;
-                                }
-							}
-						}
-                        else if(Mathf.Abs(Mathf.Atan2(snaps[i + 1].x, -snaps[i + 1].z) - Mathf.Atan2(snaps[i].x, -snaps[i].z)) < 1e-3)//经度相同
-						{
-                            for (int j = 1; j < 3; j++)
-                            {
-                                if (Mathf.Abs(Mathf.Atan2(snaps[i+j+1].x, -snaps[i + j + 1].z) - Mathf.Atan2(snaps[i + j].x, -snaps[i + j].z)) > 0.001)
-                                {
-                                    for (int k = 0; k < j; k++)
-                                    {
-                                        snaps[new_num1++] = snaps[i + k];
-                                    }
-                                    i += j;
-                                    break;
-                                }
-                                else if (j == 2)
-                                {
-                                    snaps[new_num1++] = snaps[i];
-                                    float f2 = (Mathf.Asin(snaps[i].y) + Mathf.Asin(snaps[i + 3].y))/2;
-                                    float f3 = Mathf.Atan2(snaps[i].x, -snaps[i].z);
-                                    snaps[new_num1++] = new Vector3(Mathf.Cos(f2) * Mathf.Sin(f3), Mathf.Sin(f2), Mathf.Cos(f2) * -Mathf.Cos(f3));
-                                    i += 3;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            snaps[new_num1++] = snaps[i++];
-                        }
-                    }
-                    if (LongerBelts.endWithBelt)
-                    {
-                        snaps[new_num1++] = snaps[num1];
-                    }
-                    num1 = new_num1;
+                    num1 = LongerSnapLineNonAlloc(__instance.activeGrid, begin, end, path, snaps);//段数
                 }
+				else
+				{
+                    num1 = __instance.activeGrid.SnapLineNonAlloc(begin, end, path, snaps);//段数
+				}
             }
             else
             {
@@ -766,7 +811,7 @@ namespace LongerBelts
                     if ((begin.normalized - end.normalized).magnitude < 0.0001f)//近似于夹角<1e-4即在地面投影的距离<0.02m
                     {
                         Vector3 littleOffset = new Vector3(0, 0.001f, 0);
-                        if ((begin.normalized - end.normalized).magnitude < 0.0001f)
+                        if (Mathf.Abs((begin.normalized - littleOffset.normalized).magnitude-1.414f) > 0.5f)
                         {
                             littleOffset = new Vector3(0.001f, 0, 0);
                         }
@@ -774,8 +819,8 @@ namespace LongerBelts
                         end += littleOffset;
                     }
                 }
-                startWithBelt = __instance.startObjectId != 0 && __instance.ObjectIsBelt(__instance.startObjectId);
-                endWithBelt = __instance.castObjectId != 0 && __instance.ObjectIsBelt(__instance.castObjectId);
+                //startWithBelt = __instance.startObjectId != 0 && __instance.ObjectIsBelt(__instance.startObjectId);
+                //endWithBelt = __instance.castObjectId != 0 && __instance.ObjectIsBelt(__instance.castObjectId);
                 __instance.pathPointCount = __instance.actionBuild.planetAux.SnapLineNonAlloc(begin, end, path, __instance.geodesic, !(flag10 | flag4), __instance.pathPoints);
                 if (__instance.pathPointCount > 0)
                 {
