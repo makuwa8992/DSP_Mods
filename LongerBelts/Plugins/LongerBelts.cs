@@ -6,7 +6,7 @@ using BepInEx.Configuration;
 
 namespace LongerBelts
 {
-    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.4.0")]
+    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.4.1")]
 
     public class LongerBelts : BaseUnityPlugin
     {
@@ -819,8 +819,6 @@ namespace LongerBelts
                         end += littleOffset;
                     }
                 }
-                //startWithBelt = __instance.startObjectId != 0 && __instance.ObjectIsBelt(__instance.startObjectId);
-                //endWithBelt = __instance.castObjectId != 0 && __instance.ObjectIsBelt(__instance.castObjectId);
                 __instance.pathPointCount = __instance.actionBuild.planetAux.SnapLineNonAlloc(begin, end, path, __instance.geodesic, !(flag10 | flag4), __instance.pathPoints);
                 if (__instance.pathPointCount > 0)
                 {
@@ -868,9 +866,9 @@ namespace LongerBelts
                     Vector3 pathPoint1 = __instance.pathPoints[destinationIndex];
                     Vector3 pathPoint2 = __instance.pathPoints[destinationIndex + 1];
                     Vector3 vector3_11 = pathPoint2 - pathPoint1;
-                    if ((double)vector3_11.sqrMagnitude < 1e-6)//距离过短,则合并带子
+                    if ((double)vector3_11.sqrMagnitude < 0.5 && __instance.pathPointCount == 2)//常规模式短距离带子牵拉
                     {
-                        __instance.pathPoints[destinationIndex + 1] = __instance.pathPointCount != 2 ? (__instance.pathPointCount != 3 || destinationIndex != 1 || slot1 < 0 || slot2 >= 0 ? (__instance.pathPointCount != 3 || destinationIndex != 0 || slot2 < 0 || slot1 >= 0 ? (destinationIndex != 0 ? (destinationIndex != __instance.pathPointCount - 2 ? pathPoint1 + vector3_11 * 0.5f : pathPoint2) : pathPoint1) : pathPoint2) : pathPoint1) : pathPoint1 + vector3_11 * 0.5f;
+                        __instance.pathPoints[destinationIndex + 1] = pathPoint1 + vector3_11 * 0.5f;
                         Array.Copy((Array)__instance.pathPoints, destinationIndex + 1, (Array)__instance.pathPoints, destinationIndex, __instance.pathPointCount - destinationIndex - 1);
                         --__instance.pathPointCount;
                         --destinationIndex;
