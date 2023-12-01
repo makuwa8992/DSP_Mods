@@ -6,7 +6,7 @@ using BepInEx.Configuration;
 
 namespace LongerBelts
 {
-    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.4.1")]
+    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.4.2")]
 
     public class LongerBelts : BaseUnityPlugin
     {
@@ -866,7 +866,7 @@ namespace LongerBelts
                     Vector3 pathPoint1 = __instance.pathPoints[destinationIndex];
                     Vector3 pathPoint2 = __instance.pathPoints[destinationIndex + 1];
                     Vector3 vector3_11 = pathPoint2 - pathPoint1;
-                    if ((double)vector3_11.sqrMagnitude < 0.5 && __instance.pathPointCount == 2)//常规模式短距离带子牵拉
+                    if (((double)vector3_11.sqrMagnitude < 0.5 && __instance.pathPointCount == 2) || (double)vector3_11.sqrMagnitude < 1e-5f)//常规模式短距离带子牵拉
                     {
                         __instance.pathPoints[destinationIndex + 1] = pathPoint1 + vector3_11 * 0.5f;
                         Array.Copy((Array)__instance.pathPoints, destinationIndex + 1, (Array)__instance.pathPoints, destinationIndex, __instance.pathPointCount - destinationIndex - 1);
