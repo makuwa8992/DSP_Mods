@@ -6,7 +6,7 @@ using BepInEx.Configuration;
 
 namespace LongerBelts
 {
-    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.4.2")]
+    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.4.3")]
 
     public class LongerBelts : BaseUnityPlugin
     {
@@ -18,14 +18,14 @@ namespace LongerBelts
         static public float current_distance = 1.9f;
         static public float longitudeDistance = 1.75f;
         static public float latitudeDistance = 1.5f;
+        private readonly float minimumGridDistance = 1.0f;
+        private readonly float maxmumGridDistance = 3.0f;
         static public float minimum_distance = 0.400001f;
         private readonly float maxmum_distance = 2.302172f;
         static public int pathMode = 0;
         static public bool longerOnGrid = false;
         private int distance_units = 0;
         private Translate UItexture;
-        //static public bool startWithBelt = false;
-        //static public bool endWithBelt = false;
         static public float test;
         void Awake()
         {
@@ -63,21 +63,21 @@ namespace LongerBelts
             longerOnGrid = GUILayout.Toggle(longerOnGrid, UItexture.ifLongerOnGrid);
             GUILayout.BeginHorizontal();
             GUILayout.Label(UItexture.longitudeDistance, GUILayout.Width(140f));
-            longitudeDistance = GUILayout.HorizontalSlider(longitudeDistance, 0.001f, 3f, GUILayout.Width(80f));
+            longitudeDistance = GUILayout.HorizontalSlider(longitudeDistance, minimumGridDistance, maxmumGridDistance, GUILayout.Width(80f));
             string input_distance = GUILayout.TextField(longitudeDistance.ToString("0.000"), GUILayout.Width(50f));
             if (float.TryParse(input_distance, out float temp_distance))
             {
-                if (temp_distance < maxmum_distance && temp_distance > minimum_distance)
+                if (temp_distance < maxmumGridDistance && temp_distance > minimumGridDistance)
                 {
                     longitudeDistance = temp_distance;
                 }
             }
             GUILayout.Label(UItexture.latitudeDistance, GUILayout.Width(140f));
-            latitudeDistance = GUILayout.HorizontalSlider(latitudeDistance, 0.001f, 3f, GUILayout.Width(80f));
+            latitudeDistance = GUILayout.HorizontalSlider(latitudeDistance, minimumGridDistance, maxmumGridDistance, GUILayout.Width(80f));
             input_distance = GUILayout.TextField(latitudeDistance.ToString("0.000"), GUILayout.Width(50f));
             if (float.TryParse(input_distance, out temp_distance))
             {
-                if (temp_distance < maxmum_distance && temp_distance > minimum_distance)
+                if (temp_distance < maxmumGridDistance && temp_distance > minimumGridDistance)
                 {
                     latitudeDistance = temp_distance;
                 }
@@ -149,7 +149,7 @@ namespace LongerBelts
                 f2 -= 6.283185f;//f2 = num4-num2±2kπ,f2∈[-π,π]
             if (path == 1)//先沿纬线走,再沿经线走
             {
-                float longitudeSegmentCount = (float)PlanetGrid.DetermineLongitudeSegmentCount(Mathf.FloorToInt(Mathf.Max(0.0f, Mathf.Abs(f1 / 6.283185f * (float)__instance.segment) - 0.1f)), __instance.segment);//起始点维度的经线分割数/5
+                float longitudeSegmentCount = (float)PlanetGrid.DetermineLongitudeSegmentCount(Mathf.FloorToInt(Mathf.Max(0.0f, Mathf.Abs(f1 / 6.283185f * (float)__instance.segment) - 0.1f)), __instance.segment);//起始点纬度的经线分割数/5
                 if ((Mathf.Abs(f2) - 1.57079637f) * longitudeSegmentCount > (1.57079637f - heigherLatitude) * 200)
 				{
                     if (f2 > 0)
@@ -174,6 +174,10 @@ namespace LongerBelts
                     snaps[count++] = new Vector3(num8 * Mathf.Sin(num2 + t), Mathf.Sin(f1), -num8 * Mathf.Cos(num2 + t));
                 }
                 Vector3 midNormalized = new Vector3(num8 * Mathf.Sin(longitude1), Mathf.Sin(f1), -num8 * Mathf.Cos(longitude1));//中间点
+                if((endNormalized- midNormalized).magnitude < 0.00251f)//跨度小于0.4格
+				{
+                    return count;
+                }
                 for (int index = 1; index <= latitudeSnaps; ++index)//沿经线走,直接插值
                 {
                     float t = (float)index / (float)latitudeSnaps;
@@ -196,7 +200,6 @@ namespace LongerBelts
                     }
                     num3 = (double)num3 < 0.0 ? -3.141593f - num3 : 3.141593f - num3;//num3∈[-π,π]意义:2*π/2-num3,意思就是对着90°的极点翻转到另一端
                 }
-                float longitude1 = num2 + f2;//目标点经度
                 float f3 = num3 - f1;//目标点纬度跨度
                 int longitudeSnaps = (int)(Mathf.Abs(f2) / 1.2566370614357f * longitudeSegmentCount / LongerBelts.latitudeDistance) + 1;//沿纬线总步数
                 int latitudeSnaps = (int)(Mathf.Abs(f3) / 0.0062831853f / LongerBelts.longitudeDistance) + 1;//沿经线总步数
@@ -207,8 +210,10 @@ namespace LongerBelts
                     float t = (float)index / (float)latitudeSnaps;
                     snaps[count++] = Vector3.Slerp(beginNormalized, midNormalized, t).normalized;
                 }
-                float midLongitude = Mathf.Atan2(midNormalized.x, -midNormalized.z);
-                float endLongitude = Mathf.Atan2(end.x, -end.z);
+                if (Mathf.Abs(f2) / 1.2566370614357f * longitudeSegmentCount < 0.4f)//跨度小于0.4格
+                {
+                    return count;
+                }
                 for (int index = 1; index <= longitudeSnaps; ++index)//沿纬线走,根据经度生成坐标
                 {
                     float t = num2 + ((float)index / (float)longitudeSnaps) * f2;
@@ -431,8 +436,8 @@ namespace LongerBelts
                 int castObjectId = __instance.castObjectId;
                 bool flag2 = __instance.startObjectId != 0 && !__instance.ObjectIsBelt(__instance.startObjectId);
                 bool flag3 = castObjectId != 0 && !__instance.ObjectIsBelt(castObjectId);
-                bool flag4 = __instance.startObjectId != 0 && __instance.ObjectIsAddonBuilding(__instance.startObjectId);
-                bool flag5 = castObjectId != 0 && __instance.ObjectIsAddonBuilding(castObjectId);
+                bool flag4 = __instance.startObjectId != 0 && __instance.ObjectIsAddonBuilding(__instance.startObjectId);//始于监测计或喷涂机
+                bool flag5 = castObjectId != 0 && __instance.ObjectIsAddonBuilding(castObjectId);//终于监测计或喷涂机
                 bool flag6 = __instance.startObjectId != 0 && __instance.ObjectIsBelt(__instance.startObjectId);
                 bool flag7 = castObjectId != 0 && __instance.ObjectIsBelt(castObjectId);
                 bool flag8 = __instance.startObjectId > 0;
@@ -445,7 +450,7 @@ namespace LongerBelts
                 bool flag11 = poseArray2.Length != 0;
                 int nearestAddonAreaIdx = __instance.CalculateNearestAddonAreaIdx(castObjectId, __instance.castGroundPosSnapped);
                 bool flag12 = __instance.startObjectId != 0 && __instance.startObjectId == castObjectId;
-                int num1 = __instance.startObjectId != 0 || castObjectId != 0 ? (__instance.startObjectId != castObjectId ? 1 : 0) : 0;
+                int num1 = __instance.startObjectId != 0 || castObjectId != 0 ? (__instance.startObjectId != castObjectId ? 1 : 0) : 0;//始末至少一端有建筑且不是同一建筑
                 PrefabDesc prefabDesc1 = __instance.GetPrefabDesc(__instance.startObjectId);
                 Pose objectPose1 = __instance.GetObjectPose(__instance.startObjectId);
                 PrefabDesc prefabDesc2 = __instance.GetPrefabDesc(castObjectId);
@@ -460,11 +465,11 @@ namespace LongerBelts
                 Vector3 b2 = Vector3.zero;
                 Vector3 a2 = Vector3.zero;
                 Vector3 vector3_1;
-                if (num1 != 0)
+                if (num1 != 0)//始末至少一端有建筑且不是同一建筑
                 {
                     int num2 = 0;
                     int num3 = 0;
-                    if (flag10 | flag4)
+                    if (flag10 | flag4)//始于可连接建筑 | 始于监测计或喷涂机
                     {
                         float num4 = (float)((double)__instance.altitude * 1.33333325386047 + (double)__instance.planet.realRadius + 0.200000002980232) - __instance.startTarget.magnitude;
                         float num5 = -100000f;
@@ -539,7 +544,7 @@ namespace LongerBelts
                                 beltBuildTip.SetFilterToEntity();
                             }
                         }
-                    }
+                    }//始于有固定出入口的建筑 | 始于监测计或喷涂机
                     if (flag11 | flag5)
                     {
                         float num16 = (float)((double)__instance.altitude * 1.33333325386047 + (double)__instance.planet.realRadius + 0.200000002980232) - __instance.cursorTarget.magnitude;
@@ -604,7 +609,7 @@ namespace LongerBelts
                         }
                         if (slot2 >= 0)
                             end = a2;
-                    }
+                    }//始于有固定出入口的建筑 | 终于监测计或喷涂机
                     if (flag10 | flag4 && flag11 | flag5 && slot1 >= 0 && slot2 >= 0)
                     {
                         vector3_1 = b1 - b2;
@@ -768,7 +773,7 @@ namespace LongerBelts
                     }
                     __instance.pathSuggest = num2 <= 0 || num3 != 0 && num2 != num3 ? (num3 <= 0 || num2 != 0 && num2 != num3 ? 0 : num3) : num2;
                 }
-                else if (flag12)
+                else if (flag12)//始末建筑相同
                 {
                     __instance.pathPointCount = 1;
                     Vector3 vector3_10 = Vector3.zero;
@@ -805,19 +810,16 @@ namespace LongerBelts
                     }
                 }
                 int path = __instance.pathSuggest > 0 ? __instance.pathSuggest : (__instance.pathAlternative > 0 ? __instance.pathAlternative : 1);
-                if (__instance.geodesic == true && path == 2)
+                if (__instance.geodesic == true && path == 2 && (begin.normalized - end.normalized).magnitude < 0.0001f)
                 {
                     // 新模式垂直带水平距离过近调整,保证垂直带坡度<1000,使垂直传送带美观
-                    if ((begin.normalized - end.normalized).magnitude < 0.0001f)//近似于夹角<1e-4即在地面投影的距离<0.02m
+                    Vector3 littleOffset = new Vector3(0, 0.001f, 0);
+                    if (Mathf.Abs(Vector3.Dot(begin.normalized, littleOffset.normalized)) > 0.99f)//如果接近极点就改对赤道上一点叉乘
                     {
-                        Vector3 littleOffset = new Vector3(0, 0.001f, 0);
-                        if (Mathf.Abs((begin.normalized - littleOffset.normalized).magnitude-1.414f) > 0.5f)
-                        {
-                            littleOffset = new Vector3(0.001f, 0, 0);
-                        }
-                        littleOffset = Vector3.Cross(end - begin, littleOffset);//横向偏置=纵向跨度叉乘一个模长为0.001的向量(通常指向北极),相当于保证坡度不大于1000
-                        end += littleOffset;
+                        littleOffset = new Vector3(0.001f, 0, 0);
                     }
+                    littleOffset = Vector3.Cross(end - begin, littleOffset);//横向偏置=纵向跨度叉乘一个模长为0.001的向量(通常指向北极),相当于保证坡度不大于1000
+                    end += littleOffset;
                 }
                 __instance.pathPointCount = __instance.actionBuild.planetAux.SnapLineNonAlloc(begin, end, path, __instance.geodesic, !(flag10 | flag4), __instance.pathPoints);
                 if (__instance.pathPointCount > 0)
@@ -827,10 +829,10 @@ namespace LongerBelts
                 }
                 if (slot1 >= 0)
                 {
-                    if (flag4)
+                    if (flag4)//起始端的建筑是流速计或者喷涂机
                     {
                         vector3_1 = b1 - a1;
-                        if ((double)vector3_1.magnitude > 1.70000004768372)//起始端附近带子和光标实际距离较远的情况
+                        if ((double)vector3_1.magnitude > 1.70000004768372)
                         {
                             Array.Copy((Array)__instance.pathPoints, 0, (Array)__instance.pathPoints, 2, __instance.pathPointCount);
                             __instance.pathPoints[0] = b1;
@@ -842,14 +844,14 @@ namespace LongerBelts
                     Array.Copy((Array)__instance.pathPoints, 0, (Array)__instance.pathPoints, 1, __instance.pathPointCount);
                     __instance.pathPoints[0] = b1;
                     ++__instance.pathPointCount;
-                }//起始端有别的带子的情况
+                }//起始端有建筑的情况
             label_130:
                 if (slot2 >= 0)
                 {
-                    if (flag5)
+                    if (flag5)//末端的建筑是流速计或者喷涂机
                     {
                         vector3_1 = b2 - a2;
-                        if ((double)vector3_1.magnitude > 1.70000004768372)//末端带子和光标距离较远的情况
+                        if ((double)vector3_1.magnitude > 1.70000004768372)
                         {
                             __instance.pathPoints[__instance.pathPointCount] = (b2 + a2) * 0.5f;
                             __instance.pathPoints[__instance.pathPointCount + 1] = b2;
@@ -859,14 +861,14 @@ namespace LongerBelts
                     }
                     __instance.pathPoints[__instance.pathPointCount] = b2;
                     ++__instance.pathPointCount;
-                }//末端有别的带子的情况
+                }//末端有建筑的情况
             label_135:
                 for (int destinationIndex = 0; destinationIndex < __instance.pathPointCount - 1; ++destinationIndex)
                 {
                     Vector3 pathPoint1 = __instance.pathPoints[destinationIndex];
                     Vector3 pathPoint2 = __instance.pathPoints[destinationIndex + 1];
                     Vector3 vector3_11 = pathPoint2 - pathPoint1;
-                    if (((double)vector3_11.sqrMagnitude < 0.5 && __instance.pathPointCount == 2) || (double)vector3_11.sqrMagnitude < 1e-5f)//常规模式短距离带子牵拉
+                    if (((double)vector3_11.sqrMagnitude < 0.5 && (__instance.pathPointCount == 2 || !__instance.geodesic)) || (double)vector3_11.sqrMagnitude < 1e-5f)//常规模式短距离带子牵拉
                     {
                         __instance.pathPoints[destinationIndex + 1] = pathPoint1 + vector3_11 * 0.5f;
                         Array.Copy((Array)__instance.pathPoints, destinationIndex + 1, (Array)__instance.pathPoints, destinationIndex, __instance.pathPointCount - destinationIndex - 1);
