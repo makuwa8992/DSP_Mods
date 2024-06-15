@@ -19,10 +19,11 @@ namespace LongerBelts
 		public string WarningNotice;
 		public string unlimit_distance_instruction;
 		public string unlimit_distance_setting;
-		static public Translate NewTexture(Language language)
+		public string resize_window;
+		static public Translate NewTexture()
 		{
 			Translate texture = new Translate();
-			if(language == Language.zhCN)
+			if(Localization.isZHCN)
 			{
 				texture.ifLongerOnGrid = "更改经纬线模式默认跨度";
 				texture.longitudeDistance = "沿经线时跨度";
@@ -37,8 +38,9 @@ namespace LongerBelts
 				texture.WarningNotice = "下列功能慎用!";
 				texture.unlimit_distance_instruction = "勾选以启用弱约束间距输入框(常规游戏中会出现传送带过短或过长等错误\n即使使用无条件铺设也可能触发特殊bug,造出的蓝图也未必能用)";
 				texture.unlimit_distance_setting = "弱约束间距输入框(配合铺设无条件作弊、测试用):";
+				texture.resize_window = "按左Ctrl+↑/左Ctrl+↓调整窗口大小";
 			}
-			else if(language == Language.enUS)
+			else
 			{
 				texture.ifLongerOnGrid = "Change default span in gridline mode";
 				texture.longitudeDistance = "Latitude Span";
@@ -53,6 +55,7 @@ namespace LongerBelts
 				texture.WarningNotice = "Exercise caution when modifying the following settings!";
 				texture.unlimit_distance_instruction = "Check to enable the following input box(certain numbers can lead\nto errors such as belts being too short or too long during vanilla game.)";
 				texture.unlimit_distance_setting = "Maximum Spacing(less constraints)";
+				texture.resize_window = "Press LCtrl+↑/LCtrl+↓ to Resize the window";
 			}
 			return texture;
 		}
