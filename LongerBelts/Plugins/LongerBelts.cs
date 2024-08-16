@@ -8,7 +8,7 @@ using System.Reflection.Emit;
 
 namespace LongerBelts
 {
-    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.5.0")]
+    [BepInPlugin("shisang_LongerBelts", "LongerBelts", "1.5.1")]
 
     public class LongerBelts : BaseUnityPlugin
     {
@@ -173,10 +173,11 @@ namespace LongerBelts
         }
 
 
-        public static int LongerSnapLineNonAlloc(PlanetGrid planetGrid , Vector3 begin, Vector3 end, int path, Vector3[] snaps)
+        public static int LongerSnapLineNonAlloc(PlanetGrid planetGrid , Vector3 begin, Vector3 end, int path, Vector3[] snaps, out int swerveIndex)
         {
 			if (LongerBelts.longerOnGrid)
 			{
+                swerveIndex = 0;
                 int num1 = snaps.Length - 10;//snaps.Length在某个地方初始化的时候是160,不知道这里过程中有没有改,即snaps最多生成160个,num1=150
                 if (num1 <= 0)
                     return 0;
@@ -200,13 +201,9 @@ namespace LongerBelts
                     if ((Mathf.Abs(f2) - 1.57079637f) * longitudeSegmentCount > (1.57079637f - heigherLatitude) * 200)
 				    {
                         if (f2 > 0)
-					    {
                             f2 -= 3.141593f;//f2∈[-π,π]
-                        }
 					    else
-					    {
                             f2 += 3.141593f;//f2∈[-π,π]
-                        }
                         num3 = (double)num3 < 0.0 ? -3.141593f - num3 : 3.141593f - num3;//num3∈[-π,-π/2]∪[π/2,π]意义:2*π/2-num3,意思就是对着90°的极点翻转到另一端
                     }
                     float longitude1 = num2 + f2;//目标点的假想经度
@@ -224,6 +221,7 @@ namespace LongerBelts
                         float t = f2 * (float)index / (float)longitudeSnaps;
                         snaps[count++] = new Vector3(num8 * Mathf.Sin(num2 + t), Mathf.Sin(f1), -num8 * Mathf.Cos(num2 + t));
                     }
+                    swerveIndex = count;
                     Vector3 midNormalized = new Vector3(num8 * Mathf.Sin(longitude1), Mathf.Sin(f1), -num8 * Mathf.Cos(longitude1));//中间点
                     if((endNormalized- midNormalized).magnitude < 0.00251f)//跨度小于0.4格
 				    {
@@ -265,6 +263,7 @@ namespace LongerBelts
                         float t = (float)index / (float)latitudeSnaps;
                         snaps[count++] = Vector3.Slerp(beginNormalized, midNormalized, t).normalized;
                     }
+                    swerveIndex = count;
                     if (Mathf.Abs(f2) / 1.2566370614357f * longitudeSegmentCount < 0.4f)//跨度小于0.4格
                     {
                         return count;
@@ -279,7 +278,7 @@ namespace LongerBelts
 			}
 			else
 			{
-                return planetGrid.SnapLineNonAlloc(begin, end, path, snaps);
+                return planetGrid.SnapLineNonAlloc(begin, end, path, snaps, out swerveIndex);
 			}
         }
         public static bool LongerGeodesic(Vector3 begin, Vector3 end, ref int counts, Vector3[] snaps)
@@ -356,10 +355,8 @@ namespace LongerBelts
             matcher.MatchForward(false,
                 new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(PlanetGrid), nameof(PlanetGrid.SnapLineNonAlloc))));
             matcher.SetAndAdvance(OpCodes.Call, AccessTools.Method(typeof(LongerBelts), nameof(LongerBelts.LongerSnapLineNonAlloc)));
-            var snaps = matcher.InstructionAt(-2).operand;
+            var snaps = matcher.InstructionAt(-3).operand;
             var jmpBeltGeneration = matcher.InstructionAt(1).operand;
-            var beginLF = matcher.InstructionAt(4).operand;
-            var endLF = matcher.InstructionAt(7).operand;
             matcher.Advance(5);
             matcher.CreateLabelAt(matcher.Pos, out var jmpShorterPath);
             matcher.InsertAndAdvance(
@@ -429,9 +426,9 @@ namespace LongerBelts
             matcher.MatchForward(true,
                 new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(PlanetAuxData), nameof(PlanetAuxData.SnapLineNonAlloc))));
             //Debug.Log("Position:"+matcher.Pos);
-            var begin = matcher.InstructionAt(-12).operand;
-            var end = matcher.InstructionAt(-11).operand;
-            matcher.Advance(-16)
+            var begin = matcher.InstructionAt(-22).operand;
+            var end = matcher.InstructionAt(-21).operand;
+            matcher.Advance(-26)
                 .InsertAndAdvance(
                 new CodeInstruction(OpCodes.Ldloc_S, begin),
                 new CodeInstruction(OpCodes.Ldloca_S, end),
@@ -441,6 +438,8 @@ namespace LongerBelts
 
             return matcher.InstructionEnumeration();
         }
+
+
 
     }
 }
